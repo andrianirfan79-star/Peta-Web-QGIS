@@ -1,0 +1,718 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="initial-scale=1,user-scalable=no,maximum-scale=1,width=device-width">
+        <meta name="mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <link rel="stylesheet" href="css/leaflet.css">
+        <link rel="stylesheet" href="css/L.Control.Layers.Tree.css">
+        <link rel="stylesheet" href="css/qgis2web.css">
+        <link rel="stylesheet" href="css/fontawesome-all.min.css">
+        <link rel="stylesheet" href="css/leaflet.photon.css">
+        <style>
+        html, body, #map {
+            width: 100%;
+            height: 100%;
+            padding: 0;
+            margin: 0;
+        }
+        </style>
+        <title></title>
+    </head>
+    <body>
+        <div id="map">
+        </div>
+        <script src="js/qgis2web_expressions.js"></script>
+        <script src="js/leaflet.js"></script>
+        <script src="js/L.Control.Layers.Tree.min.js"></script>
+        <script src="js/leaflet.rotatedMarker.js"></script>
+        <script src="js/leaflet.pattern.js"></script>
+        <script src="js/leaflet-hash.js"></script>
+        <script src="js/Autolinker.min.js"></script>
+        <script src="js/rbush.min.js"></script>
+        <script src="js/labelgun.min.js"></script>
+        <script src="js/labels.js"></script>
+        <script src="js/leaflet.photon.js"></script>
+        <script src="data/TenagaGizi_1.js"></script>
+        <script src="data/TenagaKefarmasian_2.js"></script>
+        <script src="data/Bidan_3.js"></script>
+        <script src="data/Perawat_4.js"></script>
+        <script>
+        var highlightLayer;
+        function highlightFeature(e) {
+            highlightLayer = e.target;
+
+            if (e.target.feature.geometry.type === 'LineString' || e.target.feature.geometry.type === 'MultiLineString') {
+              highlightLayer.setStyle({
+                color: 'rgba(255, 255, 0, 1.00)',
+              });
+            } else {
+              highlightLayer.setStyle({
+                fillColor: 'rgba(255, 255, 0, 1.00)',
+                fillOpacity: 1
+              });
+            }
+            highlightLayer.openPopup();
+        }
+        var map = L.map('map', {
+            zoomControl:false, maxZoom:28, minZoom:1
+        }).fitBounds([[-7.688624833754136,108.89731352392442],[2.481275988235992,128.01528962745357]]);
+        var hash = new L.Hash(map);
+        map.attributionControl.setPrefix('<a href="https://github.com/tomchadwin/qgis2web" target="_blank">qgis2web</a> &middot; <a href="https://leafletjs.com" title="A JS library for interactive maps">Leaflet</a> &middot; <a href="https://qgis.org">QGIS</a>');
+        var autolinker = new Autolinker({truncate: {length: 30, location: 'smart'}});
+        // remove popup's row if "visible-with-data"
+        function removeEmptyRowsFromPopupContent(content, feature) {
+         var tempDiv = document.createElement('div');
+         tempDiv.innerHTML = content;
+         var rows = tempDiv.querySelectorAll('tr');
+         for (var i = 0; i < rows.length; i++) {
+             var td = rows[i].querySelector('td.visible-with-data');
+             var key = td ? td.id : '';
+             if (td && td.classList.contains('visible-with-data') && feature.properties[key] == null) {
+                 rows[i].parentNode.removeChild(rows[i]);
+             }
+         }
+         return tempDiv.innerHTML;
+        }
+        // modify popup if contains media
+        function addClassToPopupIfMedia(content, popup) {
+            var tempDiv = document.createElement('div');
+            tempDiv.innerHTML = content;
+            var imgTd = tempDiv.querySelector('td img');
+            if (imgTd) {
+                var src = imgTd.getAttribute('src');
+                if (/\.(jpg|jpeg|png|gif|bmp|webp|avif)$/i.test(src)) {
+                    popup._contentNode.classList.add('media');
+                    setTimeout(function() {
+                        popup.update();
+                    }, 10);
+                } else if (/\.(mp3|wav|ogg|aac)$/i.test(src)) {
+                    var audio = document.createElement('audio');
+                    audio.controls = true;
+                    audio.src = src;
+                    imgTd.parentNode.replaceChild(audio, imgTd);
+                    popup._contentNode.classList.add('media');
+                    setTimeout(function() {
+                        popup.setContent(tempDiv.innerHTML);
+                        popup.update();
+                    }, 10);
+                } else if (/\.(mp4|webm|ogg|mov)$/i.test(src)) {
+                    var video = document.createElement('video');
+                    video.controls = true;
+                    video.src = src;
+                    video.style.width = "400px";
+                    video.style.height = "300px";
+                    video.style.maxHeight = "60vh";
+                    video.style.maxWidth = "60vw";
+                    imgTd.parentNode.replaceChild(video, imgTd);
+                    popup._contentNode.classList.add('media');
+                    // Aggiorna il popup quando il video carica i metadati
+                    video.addEventListener('loadedmetadata', function() {
+                        popup.update();
+                    });
+                    setTimeout(function() {
+                        popup.setContent(tempDiv.innerHTML);
+                        popup.update();
+                    }, 10);
+                } else {
+                    popup._contentNode.classList.remove('media');
+                }
+            } else {
+                popup._contentNode.classList.remove('media');
+            }
+        }
+        var zoomControl = L.control.zoom({
+            position: 'topleft'
+        }).addTo(map);
+        var bounds_group = new L.featureGroup([]);
+        function setBounds() {
+        }
+        map.createPane('pane_OpenStreetMap_0');
+        map.getPane('pane_OpenStreetMap_0').style.zIndex = 400;
+        var layer_OpenStreetMap_0 = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            pane: 'pane_OpenStreetMap_0',
+            opacity: 1.0,
+            attribution: '',
+            minZoom: 1,
+            maxZoom: 28,
+            minNativeZoom: 0,
+            maxNativeZoom: 19
+        });
+        layer_OpenStreetMap_0;
+        map.addLayer(layer_OpenStreetMap_0);
+        function pop_TenagaGizi_1(feature, layer) {
+            layer.on({
+                mouseout: function(e) {
+                    for (var i in e.target._eventParents) {
+                        if (typeof e.target._eventParents[i].resetStyle === 'function') {
+                            e.target._eventParents[i].resetStyle(e.target);
+                        }
+                    }
+                    if (typeof layer.closePopup == 'function') {
+                        layer.closePopup();
+                    } else {
+                        layer.eachLayer(function(feature){
+                            feature.closePopup()
+                        });
+                    }
+                },
+                mouseover: highlightFeature,
+            });
+            var popupContent = '<table>\
+                    <tr>\
+                        <th scope="row">Kabupaten/Kota</th>\
+                        <td class="visible-with-data" id="Kabupaten/Kota">' + (feature.properties['Kabupaten/Kota'] !== null ? autolinker.link(String(feature.properties['Kabupaten/Kota']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">Tenaga Kesehatan - Tenaga Gizi</th>\
+                        <td class="visible-with-data" id="Tenaga Kesehatan - Tenaga Gizi">' + (feature.properties['Tenaga Kesehatan - Tenaga Gizi'] !== null ? autolinker.link(String(feature.properties['Tenaga Kesehatan - Tenaga Gizi']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_TenagaGizi_1_0(feature) {
+            if (feature.properties['Tenaga Kesehatan - Tenaga Gizi'] >= 24.000000 && feature.properties['Tenaga Kesehatan - Tenaga Gizi'] <= 37.000000 ) {
+                return {
+                pane: 'pane_TenagaGizi_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(202,0,32,1.0)',
+                interactive: true,
+            }
+            }
+            if (feature.properties['Tenaga Kesehatan - Tenaga Gizi'] >= 37.000000 && feature.properties['Tenaga Kesehatan - Tenaga Gizi'] <= 50.000000 ) {
+                return {
+                pane: 'pane_TenagaGizi_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(244,165,130,1.0)',
+                interactive: true,
+            }
+            }
+            if (feature.properties['Tenaga Kesehatan - Tenaga Gizi'] >= 50.000000 && feature.properties['Tenaga Kesehatan - Tenaga Gizi'] <= 63.000000 ) {
+                return {
+                pane: 'pane_TenagaGizi_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(255,255,255,1.0)',
+                interactive: true,
+            }
+            }
+            if (feature.properties['Tenaga Kesehatan - Tenaga Gizi'] >= 63.000000 && feature.properties['Tenaga Kesehatan - Tenaga Gizi'] <= 76.000000 ) {
+                return {
+                pane: 'pane_TenagaGizi_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(186,186,186,1.0)',
+                interactive: true,
+            }
+            }
+            if (feature.properties['Tenaga Kesehatan - Tenaga Gizi'] >= 76.000000 && feature.properties['Tenaga Kesehatan - Tenaga Gizi'] <= 89.000000 ) {
+                return {
+                pane: 'pane_TenagaGizi_1',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(64,64,64,1.0)',
+                interactive: true,
+            }
+            }
+        }
+        map.createPane('pane_TenagaGizi_1');
+        map.getPane('pane_TenagaGizi_1').style.zIndex = 401;
+        map.getPane('pane_TenagaGizi_1').style['mix-blend-mode'] = 'normal';
+        var layer_TenagaGizi_1 = new L.geoJson(json_TenagaGizi_1, {
+            attribution: '',
+            interactive: true,
+            dataVar: 'json_TenagaGizi_1',
+            layerName: 'layer_TenagaGizi_1',
+            pane: 'pane_TenagaGizi_1',
+            onEachFeature: pop_TenagaGizi_1,
+            style: style_TenagaGizi_1_0,
+        });
+        bounds_group.addLayer(layer_TenagaGizi_1);
+        map.addLayer(layer_TenagaGizi_1);
+        function pop_TenagaKefarmasian_2(feature, layer) {
+            layer.on({
+                mouseout: function(e) {
+                    for (var i in e.target._eventParents) {
+                        if (typeof e.target._eventParents[i].resetStyle === 'function') {
+                            e.target._eventParents[i].resetStyle(e.target);
+                        }
+                    }
+                    if (typeof layer.closePopup == 'function') {
+                        layer.closePopup();
+                    } else {
+                        layer.eachLayer(function(feature){
+                            feature.closePopup()
+                        });
+                    }
+                },
+                mouseover: highlightFeature,
+            });
+            var popupContent = '<table>\
+                    <tr>\
+                        <th scope="row">Kabupaten/Kota</th>\
+                        <td class="visible-with-data" id="Kabupaten/Kota">' + (feature.properties['Kabupaten/Kota'] !== null ? autolinker.link(String(feature.properties['Kabupaten/Kota']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">Tenaga Kesehatan - Tenaga Kefarmasian</th>\
+                        <td class="visible-with-data" id="Tenaga Kesehatan - Tenaga Kefarmasian">' + (feature.properties['Tenaga Kesehatan - Tenaga Kefarmasian'] !== null ? autolinker.link(String(feature.properties['Tenaga Kesehatan - Tenaga Kefarmasian']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_TenagaKefarmasian_2_0(feature) {
+            if (feature.properties['Tenaga Kesehatan - Tenaga Kefarmasian'] >= 43.000000 && feature.properties['Tenaga Kesehatan - Tenaga Kefarmasian'] <= 152.000000 ) {
+                return {
+                pane: 'pane_TenagaKefarmasian_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(255,255,97,1.0)',
+                interactive: true,
+            }
+            }
+            if (feature.properties['Tenaga Kesehatan - Tenaga Kefarmasian'] >= 152.000000 && feature.properties['Tenaga Kesehatan - Tenaga Kefarmasian'] <= 261.000000 ) {
+                return {
+                pane: 'pane_TenagaKefarmasian_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(62,53,107,1.0)',
+                interactive: true,
+            }
+            }
+            if (feature.properties['Tenaga Kesehatan - Tenaga Kefarmasian'] >= 261.000000 && feature.properties['Tenaga Kesehatan - Tenaga Kefarmasian'] <= 370.000000 ) {
+                return {
+                pane: 'pane_TenagaKefarmasian_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(53,123,163,1.0)',
+                interactive: true,
+            }
+            }
+            if (feature.properties['Tenaga Kesehatan - Tenaga Kefarmasian'] >= 370.000000 && feature.properties['Tenaga Kesehatan - Tenaga Kefarmasian'] <= 479.000000 ) {
+                return {
+                pane: 'pane_TenagaKefarmasian_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(75,194,173,1.0)',
+                interactive: true,
+            }
+            }
+            if (feature.properties['Tenaga Kesehatan - Tenaga Kefarmasian'] >= 479.000000 && feature.properties['Tenaga Kesehatan - Tenaga Kefarmasian'] <= 588.000000 ) {
+                return {
+                pane: 'pane_TenagaKefarmasian_2',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(222,245,229,1.0)',
+                interactive: true,
+            }
+            }
+        }
+        map.createPane('pane_TenagaKefarmasian_2');
+        map.getPane('pane_TenagaKefarmasian_2').style.zIndex = 402;
+        map.getPane('pane_TenagaKefarmasian_2').style['mix-blend-mode'] = 'normal';
+        var layer_TenagaKefarmasian_2 = new L.geoJson(json_TenagaKefarmasian_2, {
+            attribution: '',
+            interactive: true,
+            dataVar: 'json_TenagaKefarmasian_2',
+            layerName: 'layer_TenagaKefarmasian_2',
+            pane: 'pane_TenagaKefarmasian_2',
+            onEachFeature: pop_TenagaKefarmasian_2,
+            style: style_TenagaKefarmasian_2_0,
+        });
+        bounds_group.addLayer(layer_TenagaKefarmasian_2);
+        map.addLayer(layer_TenagaKefarmasian_2);
+        function pop_Bidan_3(feature, layer) {
+            layer.on({
+                mouseout: function(e) {
+                    for (var i in e.target._eventParents) {
+                        if (typeof e.target._eventParents[i].resetStyle === 'function') {
+                            e.target._eventParents[i].resetStyle(e.target);
+                        }
+                    }
+                    if (typeof layer.closePopup == 'function') {
+                        layer.closePopup();
+                    } else {
+                        layer.eachLayer(function(feature){
+                            feature.closePopup()
+                        });
+                    }
+                },
+                mouseover: highlightFeature,
+            });
+            var popupContent = '<table>\
+                    <tr>\
+                        <th scope="row">Kabupaten/Kota</th>\
+                        <td class="visible-with-data" id="Kabupaten/Kota">' + (feature.properties['Kabupaten/Kota'] !== null ? autolinker.link(String(feature.properties['Kabupaten/Kota']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">Tenaga Kesehatan - Bidan</th>\
+                        <td class="visible-with-data" id="Tenaga Kesehatan - Bidan">' + (feature.properties['Tenaga Kesehatan - Bidan'] !== null ? autolinker.link(String(feature.properties['Tenaga Kesehatan - Bidan']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_Bidan_3_0(feature) {
+            if (feature.properties['Tenaga Kesehatan - Bidan'] >= 156.000000 && feature.properties['Tenaga Kesehatan - Bidan'] <= 270.000000 ) {
+                return {
+                pane: 'pane_Bidan_3',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(255,255,97,1.0)',
+                interactive: true,
+            }
+            }
+            if (feature.properties['Tenaga Kesehatan - Bidan'] >= 270.000000 && feature.properties['Tenaga Kesehatan - Bidan'] <= 384.000000 ) {
+                return {
+                pane: 'pane_Bidan_3',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(204,231,84,1.0)',
+                interactive: true,
+            }
+            }
+            if (feature.properties['Tenaga Kesehatan - Bidan'] >= 384.000000 && feature.properties['Tenaga Kesehatan - Bidan'] <= 498.000000 ) {
+                return {
+                pane: 'pane_Bidan_3',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(153,208,71,1.0)',
+                interactive: true,
+            }
+            }
+            if (feature.properties['Tenaga Kesehatan - Bidan'] >= 498.000000 && feature.properties['Tenaga Kesehatan - Bidan'] <= 612.000000 ) {
+                return {
+                pane: 'pane_Bidan_3',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(102,184,57,1.0)',
+                interactive: true,
+            }
+            }
+            if (feature.properties['Tenaga Kesehatan - Bidan'] >= 612.000000 && feature.properties['Tenaga Kesehatan - Bidan'] <= 726.000000 ) {
+                return {
+                pane: 'pane_Bidan_3',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(51,160,44,1.0)',
+                interactive: true,
+            }
+            }
+        }
+        map.createPane('pane_Bidan_3');
+        map.getPane('pane_Bidan_3').style.zIndex = 403;
+        map.getPane('pane_Bidan_3').style['mix-blend-mode'] = 'normal';
+        var layer_Bidan_3 = new L.geoJson(json_Bidan_3, {
+            attribution: '',
+            interactive: true,
+            dataVar: 'json_Bidan_3',
+            layerName: 'layer_Bidan_3',
+            pane: 'pane_Bidan_3',
+            onEachFeature: pop_Bidan_3,
+            style: style_Bidan_3_0,
+        });
+        bounds_group.addLayer(layer_Bidan_3);
+        map.addLayer(layer_Bidan_3);
+        function pop_Perawat_4(feature, layer) {
+            layer.on({
+                mouseout: function(e) {
+                    for (var i in e.target._eventParents) {
+                        if (typeof e.target._eventParents[i].resetStyle === 'function') {
+                            e.target._eventParents[i].resetStyle(e.target);
+                        }
+                    }
+                    if (typeof layer.closePopup == 'function') {
+                        layer.closePopup();
+                    } else {
+                        layer.eachLayer(function(feature){
+                            feature.closePopup()
+                        });
+                    }
+                },
+                mouseover: highlightFeature,
+            });
+            var popupContent = '<table>\
+                    <tr>\
+                        <th scope="row">Kabupaten/Kota</th>\
+                        <td class="visible-with-data" id="Kabupaten/Kota">' + (feature.properties['Kabupaten/Kota'] !== null ? autolinker.link(String(feature.properties['Kabupaten/Kota']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">Tenaga Kesehatan - Perawat</th>\
+                        <td class="visible-with-data" id="Tenaga Kesehatan - Perawat">' + (feature.properties['Tenaga Kesehatan - Perawat'] !== null ? autolinker.link(String(feature.properties['Tenaga Kesehatan - Perawat']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_Perawat_4_0(feature) {
+            if (feature.properties['Tenaga Kesehatan - Perawat'] >= 201.000000 && feature.properties['Tenaga Kesehatan - Perawat'] <= 462.200000 ) {
+                return {
+                pane: 'pane_Perawat_4',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(255,255,97,1.0)',
+                interactive: true,
+            }
+            }
+            if (feature.properties['Tenaga Kesehatan - Perawat'] >= 462.200000 && feature.properties['Tenaga Kesehatan - Perawat'] <= 723.400000 ) {
+                return {
+                pane: 'pane_Perawat_4',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(255,191,73,1.0)',
+                interactive: true,
+            }
+            }
+            if (feature.properties['Tenaga Kesehatan - Perawat'] >= 723.400000 && feature.properties['Tenaga Kesehatan - Perawat'] <= 984.600000 ) {
+                return {
+                pane: 'pane_Perawat_4',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(255,128,49,1.0)',
+                interactive: true,
+            }
+            }
+            if (feature.properties['Tenaga Kesehatan - Perawat'] >= 984.600000 && feature.properties['Tenaga Kesehatan - Perawat'] <= 1245.800000 ) {
+                return {
+                pane: 'pane_Perawat_4',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(255,64,24,1.0)',
+                interactive: true,
+            }
+            }
+            if (feature.properties['Tenaga Kesehatan - Perawat'] >= 1245.800000 && feature.properties['Tenaga Kesehatan - Perawat'] <= 1507.000000 ) {
+                return {
+                pane: 'pane_Perawat_4',
+                opacity: 1,
+                color: 'rgba(35,35,35,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(255,0,0,1.0)',
+                interactive: true,
+            }
+            }
+        }
+        map.createPane('pane_Perawat_4');
+        map.getPane('pane_Perawat_4').style.zIndex = 404;
+        map.getPane('pane_Perawat_4').style['mix-blend-mode'] = 'normal';
+        var layer_Perawat_4 = new L.geoJson(json_Perawat_4, {
+            attribution: '',
+            interactive: true,
+            dataVar: 'json_Perawat_4',
+            layerName: 'layer_Perawat_4',
+            pane: 'pane_Perawat_4',
+            onEachFeature: pop_Perawat_4,
+            style: style_Perawat_4_0,
+        });
+        bounds_group.addLayer(layer_Perawat_4);
+        map.addLayer(layer_Perawat_4);
+        var overlaysTree = [
+            {label: 'Perawat<br /><table><tr><td style="text-align: center;"><img src="legend/Perawat_4_2014620.png" /></td><td>201 - 462</td></tr><tr><td style="text-align: center;"><img src="legend/Perawat_4_4627231.png" /></td><td>462 - 723</td></tr><tr><td style="text-align: center;"><img src="legend/Perawat_4_7239852.png" /></td><td>723 - 985</td></tr><tr><td style="text-align: center;"><img src="legend/Perawat_4_98512463.png" /></td><td>985 - 1246</td></tr><tr><td style="text-align: center;"><img src="legend/Perawat_4_124615074.png" /></td><td>1246 - 1507</td></tr></table>', layer: layer_Perawat_4},
+            {label: 'Bidan<br /><table><tr><td style="text-align: center;"><img src="legend/Bidan_3_1562700.png" /></td><td>156 - 270</td></tr><tr><td style="text-align: center;"><img src="legend/Bidan_3_2703841.png" /></td><td>270 - 384</td></tr><tr><td style="text-align: center;"><img src="legend/Bidan_3_3844982.png" /></td><td>384 - 498</td></tr><tr><td style="text-align: center;"><img src="legend/Bidan_3_4986123.png" /></td><td>498 - 612</td></tr><tr><td style="text-align: center;"><img src="legend/Bidan_3_6127264.png" /></td><td>612 - 726</td></tr></table>', layer: layer_Bidan_3},
+            {label: 'Tenaga Kefarmasian<br /><table><tr><td style="text-align: center;"><img src="legend/TenagaKefarmasian_2_431520.png" /></td><td>43 - 152</td></tr><tr><td style="text-align: center;"><img src="legend/TenagaKefarmasian_2_1522611.png" /></td><td>152 - 261</td></tr><tr><td style="text-align: center;"><img src="legend/TenagaKefarmasian_2_2613702.png" /></td><td>261 - 370</td></tr><tr><td style="text-align: center;"><img src="legend/TenagaKefarmasian_2_3704793.png" /></td><td>370 - 479</td></tr><tr><td style="text-align: center;"><img src="legend/TenagaKefarmasian_2_4795884.png" /></td><td>479 - 588</td></tr></table>', layer: layer_TenagaKefarmasian_2},
+            {label: 'Tenaga Gizi<br /><table><tr><td style="text-align: center;"><img src="legend/TenagaGizi_1_24370.png" /></td><td>24 - 37</td></tr><tr><td style="text-align: center;"><img src="legend/TenagaGizi_1_37501.png" /></td><td>37 - 50</td></tr><tr><td style="text-align: center;"><img src="legend/TenagaGizi_1_50632.png" /></td><td>50 - 63</td></tr><tr><td style="text-align: center;"><img src="legend/TenagaGizi_1_63763.png" /></td><td>63 - 76</td></tr><tr><td style="text-align: center;"><img src="legend/TenagaGizi_1_76894.png" /></td><td>76 - 89</td></tr></table>', layer: layer_TenagaGizi_1},
+            {label: "OpenStreetMap", layer: layer_OpenStreetMap_0},]
+        var lay = L.control.layers.tree(null, overlaysTree,{
+            //namedToggle: true,
+            //selectorBack: false,
+            //closedSymbol: '&#8862; &#x1f5c0;',
+            //openedSymbol: '&#8863; &#x1f5c1;',
+            //collapseAll: 'Collapse all',
+            //expandAll: 'Expand all',
+            collapsed: false, 
+        });
+        lay.addTo(map);
+		document.addEventListener("DOMContentLoaded", function() {
+            // set new Layers List height which considers toggle icon
+            function newLayersListHeight() {
+                var layerScrollbarElement = document.querySelector('.leaflet-control-layers-scrollbar');
+                if (layerScrollbarElement) {
+                    var layersListElement = document.querySelector('.leaflet-control-layers-list');
+                    var originalHeight = layersListElement.style.height 
+                        || window.getComputedStyle(layersListElement).height;
+                    var newHeight = parseFloat(originalHeight) - 50;
+                    layersListElement.style.height = newHeight + 'px';
+                }
+            }
+            var isLayersListExpanded = true;
+            var controlLayersElement = document.querySelector('.leaflet-control-layers');
+            var toggleLayerControl = document.querySelector('.leaflet-control-layers-toggle');
+            // toggle Collapsed/Expanded and apply new Layers List height
+            toggleLayerControl.addEventListener('click', function() {
+                if (isLayersListExpanded) {
+                    controlLayersElement.classList.remove('leaflet-control-layers-expanded');
+                } else {
+                    controlLayersElement.classList.add('leaflet-control-layers-expanded');
+                }
+                isLayersListExpanded = !isLayersListExpanded;
+                newLayersListHeight()
+            });	
+			// apply new Layers List height if toggle layerstree
+			if (controlLayersElement) {
+				controlLayersElement.addEventListener('click', function(event) {
+					var toggleLayerHeaderPointer = event.target.closest('.leaflet-layerstree-header-pointer span');
+					if (toggleLayerHeaderPointer) {
+						newLayersListHeight();
+					}
+				});
+			}
+            // Collapsed/Expanded at Start to apply new height
+            setTimeout(function() {
+                toggleLayerControl.click();
+            }, 10);
+            setTimeout(function() {
+                toggleLayerControl.click();
+            }, 10);
+            // Collapsed touch/small screen
+            var isSmallScreen = window.innerWidth < 650;
+            if (isSmallScreen) {
+                setTimeout(function() {
+                    controlLayersElement.classList.remove('leaflet-control-layers-expanded');
+                    isLayersListExpanded = !isLayersListExpanded;
+                }, 500);
+            }  
+        });       
+        setBounds();
+        </script>        
+    </body>
+</html>
